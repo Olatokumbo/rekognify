@@ -18,7 +18,7 @@ const schema = a.schema({
 export type Schema = ClientSchema<typeof schema>;
 
 export const data = defineData({
-  name: `${projectName}-db`,
+  name: `${projectName}-data`,
   schema,
   authorizationModes: {
     defaultAuthorizationMode: "apiKey",
