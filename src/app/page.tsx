@@ -1,4 +1,10 @@
+
+"use client"
+import { generateClient } from "aws-amplify/data";
+import type { Schema } from "@/amplify/data/resource";
 import Image from "next/image";
+
+const client = generateClient<Schema>() // use this Data client for CRUDL requests
 
 export default function Home() {
   return (
