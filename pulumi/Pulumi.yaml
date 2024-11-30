@@ -1,0 +1,9 @@
+name: rekognify
+runtime: go
+description: A minimal AWS Go Pulumi program
+backend:
+  url: s3://rekognify.pulumi
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-go

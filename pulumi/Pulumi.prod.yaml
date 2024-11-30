@@ -1,0 +1,4 @@
+encryptionsalt: v1:xdytU2Omk5U=:v1:YgXgMT+9O5fAYsu7:VCH+OoOjN/yVoIOQJ85x6LVWgfZUxA==
+config:
+  aws:region: eu-west-2
+  name: rekognify
