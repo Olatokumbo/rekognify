@@ -15,18 +15,15 @@ import (
 	"github.com/google/uuid"
 )
 
-// RequestPayload defines the expected JSON structure
 type RequestPayload struct {
 	Filename string `json:"filename"`
 	Mimetype string `json:"mimetype"`
 }
 
-// ResponsePayload defines the structure for the response
 type ResponsePayload struct {
 	URL string `json:"url"`
 }
 
-// Allowed MIME types for images
 var allowedMimeTypes = map[string]bool{
 	"image/jpeg": true,
 	"image/png":  true,
@@ -35,8 +32,9 @@ var allowedMimeTypes = map[string]bool{
 }
 
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	// Parse the JSON body
+
 	var payload RequestPayload
+
 	err := json.Unmarshal([]byte(request.Body), &payload)
 	if err != nil {
 		return events.APIGatewayProxyResponse{
@@ -45,7 +43,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
-	// Validate required fields
 	if payload.Filename == "" || payload.Mimetype == "" {
 		return events.APIGatewayProxyResponse{
 			Body:       "Both 'filename' and 'mimetype' are required.",
@@ -53,7 +50,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
-	// Validate mimetype
 	if !allowedMimeTypes[payload.Mimetype] {
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("Unsupported file type: %s", payload.Mimetype),
@@ -61,7 +57,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
-	// Get S3 bucket name from environment variables
 	bucket := os.Getenv("S3_BUCKET")
 	if bucket == "" {
 		return events.APIGatewayProxyResponse{
@@ -70,7 +65,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
-	// Create an AWS session
 	sess, err := session.NewSession()
 	if err != nil {
 		return events.APIGatewayProxyResponse{
@@ -79,10 +73,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
-	// Create an S3 service client
 	svc := s3.New(sess)
 
-	// Generate a presigned URL
 	req, _ := svc.PutObjectRequest(&s3.PutObjectInput{
 		Bucket:      aws.String(bucket),
 		Key:         aws.String(fmt.Sprintf("%s_%s", uuid.New().String(), payload.Filename)),
@@ -97,7 +89,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
-	// Return the presigned URL
 	response := ResponsePayload{
 		URL: url,
 	}
