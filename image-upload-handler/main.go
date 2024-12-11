@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"time"
 
@@ -11,95 +11,83 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/google/uuid"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
-type RequestPayload struct {
-	Filename string `json:"filename"`
-	Mimetype string `json:"mimetype"`
+type S3Event struct {
+	Records []struct {
+		S3 struct {
+			Object struct {
+				Key string `json:"key"`
+			} `json:"object"`
+		} `json:"s3"`
+	} `json:"Records"`
 }
 
-type ResponsePayload struct {
-	URL string `json:"url"`
-}
+func handler(ctx context.Context, event events.SQSEvent) (events.SQSEventResponse, error) {
+	var failures []events.SQSBatchItemFailure
 
-var allowedMimeTypes = map[string]bool{
-	"image/jpeg": true,
-	"image/png":  true,
-	"image/gif":  true,
-	"image/webp": true,
-}
+	for _, record := range event.Records {
+		fmt.Printf("Processing Message: %s\n", record.MessageId)
+		fmt.Printf("SQS Message Body: %s\n", record.Body)
 
-func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+		var s3Event S3Event
+		err := json.Unmarshal([]byte(record.Body), &s3Event)
+		if err != nil {
+			fmt.Printf("Error unmarshalling SQS message: %v\n", err)
+			failures = append(failures, events.SQSBatchItemFailure{
+				ItemIdentifier: record.MessageId,
+			})
+			continue
+		}
 
-	var payload RequestPayload
+		if len(s3Event.Records) == 0 {
+			fmt.Println("No records found in S3 event")
+			continue
+		}
 
-	err := json.Unmarshal([]byte(request.Body), &payload)
-	if err != nil {
-		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("Failed to parse request body: %s", err.Error()),
-			StatusCode: http.StatusBadRequest,
-		}, nil
+		filename := s3Event.Records[0].S3.Object.Key
+
+		sess := session.Must(session.NewSessionWithOptions(session.Options{
+			SharedConfigState: session.SharedConfigEnable,
+		}))
+
+		svc := dynamodb.New(sess)
+
+		tableName := os.Getenv("DYNAMODB_TABLE_NAME")
+
+		if tableName == "" {
+			fmt.Printf("DYNAMODB_TABLE_NAME variable not set: %v\n", err)
+			failures = append(failures, events.SQSBatchItemFailure{
+				ItemIdentifier: record.MessageId,
+			})
+			continue
+		}
+
+		_, err = svc.PutItem(&dynamodb.PutItemInput{
+			TableName: aws.String(tableName),
+			Item: map[string]*dynamodb.AttributeValue{
+				"filename": {
+					S: aws.String(filename),
+				},
+				"status": {
+					S: aws.String("PENDING"),
+				},
+				"created_at": {
+					S: aws.String(time.Now().Format(time.RFC3339)),
+				},
+			},
+		})
+		if err != nil {
+			fmt.Printf("Error inserting item into DynamoDB: %v\n", err)
+			failures = append(failures, events.SQSBatchItemFailure{
+				ItemIdentifier: record.MessageId,
+			})
+		}
 	}
 
-	if payload.Filename == "" || payload.Mimetype == "" {
-		return events.APIGatewayProxyResponse{
-			Body:       "Both 'filename' and 'mimetype' are required.",
-			StatusCode: http.StatusBadRequest,
-		}, nil
-	}
-
-	if !allowedMimeTypes[payload.Mimetype] {
-		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("Unsupported file type: %s", payload.Mimetype),
-			StatusCode: http.StatusBadRequest,
-		}, nil
-	}
-
-	bucket := os.Getenv("S3_BUCKET")
-	if bucket == "" {
-		return events.APIGatewayProxyResponse{
-			Body:       "S3_BUCKET environment variable not set.",
-			StatusCode: http.StatusInternalServerError,
-		}, nil
-	}
-
-	sess, err := session.NewSession()
-	if err != nil {
-		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("Failed to create AWS session: %s", err.Error()),
-			StatusCode: http.StatusInternalServerError,
-		}, nil
-	}
-
-	svc := s3.New(sess)
-
-	req, _ := svc.PutObjectRequest(&s3.PutObjectInput{
-		Bucket:      aws.String(bucket),
-		Key:         aws.String(fmt.Sprintf("%s_%s", uuid.New().String(), payload.Filename)),
-		ContentType: aws.String(payload.Mimetype),
-	})
-
-	url, err := req.Presign(5 * time.Minute) // URL valid for 5 minutes
-	if err != nil {
-		return events.APIGatewayProxyResponse{
-			Body:       fmt.Sprintf("Failed to generate presigned URL: %s", err.Error()),
-			StatusCode: http.StatusInternalServerError,
-		}, nil
-	}
-
-	response := ResponsePayload{
-		URL: url,
-	}
-	responseBody, _ := json.Marshal(response)
-
-	return events.APIGatewayProxyResponse{
-		Body:       string(responseBody),
-		StatusCode: http.StatusOK,
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
+	return events.SQSEventResponse{
+		BatchItemFailures: failures,
 	}, nil
 }
 

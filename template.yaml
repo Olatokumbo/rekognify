@@ -13,6 +13,7 @@ Globals:
       LogFormat: JSON
   Api:
     TracingEnabled: true
+
 Resources:
   ProcessQueue:
     Type: AWS::SQS::Queue
@@ -20,6 +21,7 @@ Resources:
       QueueName: !Sub "${AWS::StackName}-process-queue"
     Metadata:
       SamResourceId: ProcessQueue
+
   ProcessQueuePolicy:
     Type: AWS::SQS::QueuePolicy
     Properties:
@@ -36,10 +38,11 @@ Resources:
             Condition:
               ArnEquals:
                 aws:SourceArn: !GetAtt ImageBucket.Arn
+
   ImageBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}"
+      BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-bucket"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -54,28 +57,30 @@ Resources:
       NotificationConfiguration:
         QueueConfigurations:
           - Event: "s3:ObjectCreated:*"
-            Queue: !GetAtt ProcessQueue.Arn
+            Queue: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-process-queue"
+
   DBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${AWS::StackName}-receipt"
+      TableName: !Sub "${AWS::StackName}-table"
       AttributeDefinitions:
-        - AttributeName: "ImageId"
+        - AttributeName: "filename"
           AttributeType: "S"
       KeySchema:
-        - AttributeName: "ImageId"
+        - AttributeName: "filename"
           KeyType: "HASH"
       BillingMode: PAY_PER_REQUEST
-  ImageUploadHandler:
+
+  S3SignedUrlHandler:
     Type: AWS::Serverless::Function
-    FunctionName: !Sub "${AWS::StackName}-image-upload-handler"
+    FunctionName: !Sub "${AWS::StackName}-s3-signed-url-handler"
     Properties:
       PackageType: Image
       Architectures:
         - x86_64
       Events:
         CatchAll:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: Api
           Properties:
             Path: /upload
             Method: POST
@@ -88,6 +93,31 @@ Resources:
             BucketName: !Ref ImageBucket
     Metadata:
       DockerTag: provided.al2.v1
+      DockerContext: ./s3-signed-url-handler
+      Dockerfile: Dockerfile
+
+  ImageUploadHandler:
+    Type: AWS::Serverless::Function
+    FunctionName: !Sub "${AWS::StackName}-image-upload-handler"
+    Properties:
+      PackageType: Image
+      Architectures:
+        - x86_64
+      Events:
+        SQS:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ProcessQueue.Arn
+            BatchSize: 5
+            Enabled: true
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref DBTable
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref DBTable
+    Metadata:
+      DockerTag: provided.al2.v1
       DockerContext: ./image-upload-handler
       Dockerfile: Dockerfile
 
@@ -98,22 +128,19 @@ Resources:
         Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
       ResourceQuery:
         Type: CLOUDFORMATION_STACK_1_0
+
   ApplicationInsightsMonitoring:
     Type: AWS::ApplicationInsights::Application
     Properties:
       ResourceGroupName:
         Ref: ApplicationResourceGroup
       AutoConfigurationEnabled: "true"
+
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   RekognifyAPI:
     Description: API Gateway endpoint URL for Prod environment for First Function
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/rekognify/"
+
   ImageUploadHandler:
     Description: Image Upload Handler Lambda Function ARN
     Value: !GetAtt ImageUploadHandler.Arn
-  # ImageUploadHandlerFunctionIamRole:
-  #   Description: Implicit IAM Role created for Hello World function
-  #   Value: !GetAtt HelloWorldFunctionRole.Arn
