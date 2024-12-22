@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/google/uuid"
 )
@@ -22,6 +23,7 @@ type RequestPayload struct {
 
 type ResponsePayload struct {
 	URL string `json:"url"`
+	ID  string `json:"id"`
 }
 
 var allowedMimeTypes = map[string]bool{
@@ -73,11 +75,13 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
-	svc := s3.New(sess)
+	s3SVC := s3.New(sess)
 
-	req, _ := svc.PutObjectRequest(&s3.PutObjectInput{
+	filename := aws.String(fmt.Sprintf("%s_%s", uuid.New().String(), payload.Filename))
+
+	req, _ := s3SVC.PutObjectRequest(&s3.PutObjectInput{
 		Bucket:      aws.String(bucket),
-		Key:         aws.String(fmt.Sprintf("%s_%s", uuid.New().String(), payload.Filename)),
+		Key:         filename,
 		ContentType: aws.String(payload.Mimetype),
 	})
 
@@ -89,8 +93,44 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
+	tableName := os.Getenv("DYNAMODB_TABLE_NAME")
+	if tableName == "" {
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf("DYNAMODB_TABLE_NAME variable not set: %s", err.Error()),
+			StatusCode: http.StatusInternalServerError,
+		}, nil
+	}
+
+	dynamodbSess := session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}))
+
+	dynamodbSVC := dynamodb.New(dynamodbSess)
+
+	_, err = dynamodbSVC.PutItem(&dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item: map[string]*dynamodb.AttributeValue{
+			"filename": {
+				S: aws.String(*filename),
+			},
+			"status": {
+				S: aws.String("READY_TO_BE_PROCESSED"),
+			},
+			"created_at": {
+				S: aws.String(time.Now().Format(time.RFC3339)),
+			},
+		},
+	})
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf("Error inserting item into DynamoDB: %s", err.Error()),
+			StatusCode: http.StatusInternalServerError,
+		}, nil
+	}
+
 	response := ResponsePayload{
 		URL: url,
+		ID:  *filename,
 	}
 	responseBody, _ := json.Marshal(response)
 

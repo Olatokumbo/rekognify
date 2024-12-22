@@ -88,9 +88,12 @@ Resources:
         Variables:
           S3_BUCKET: !Ref ImageBucket
           S3_PREFIX: "images"
+          DYNAMODB_TABLE_NAME: !Ref DBTable
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref ImageBucket
+        - DynamoDBWritePolicy:
+            TableName: !Ref DBTable
     Metadata:
       DockerTag: provided.al2.v1
       DockerContext: ./s3-signed-url-handler
@@ -112,10 +115,19 @@ Resources:
             Enabled: true
       Environment:
         Variables:
+          S3_BUCKET: !Ref ImageBucket
           DYNAMODB_TABLE_NAME: !Ref DBTable
       Policies:
-        - DynamoDBWritePolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref DBTable
+        - S3ReadPolicy:
+            BucketName: !Ref ImageBucket
+        - Statement:
+            Sid: Rekognify
+            Effect: Allow
+            Action:
+              - rekognition:DetectLabels
+            Resource: "*"
     Metadata:
       DockerTag: provided.al2.v1
       DockerContext: ./image-upload-handler
