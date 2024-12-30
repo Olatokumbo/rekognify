@@ -39,6 +39,49 @@ Resources:
               ArnEquals:
                 aws:SourceArn: !GetAtt ImageBucket.Arn
 
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-cloudfront-oac"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: !GetAtt ImageBucket.DomainName
+            Id: S3Origin
+            S3OriginConfig: {}
+            OriginAccessControlId: !Sub "${CloudFrontOriginAccessControl.Id}"
+        Enabled: true
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          Compress: true
+        ViewerCertificate:
+          SslSupportMethod: sni-only
+          AcmCertificateArn: arn:aws:acm:us-east-1:626635403708:certificate/4d0e5c7c-8d5e-4f3b-a50e-4d679c857bda
+          MinimumProtocolVersion: TLSv1.2_2018
+        HttpVersion: http2
+        Aliases:
+          - !Sub "cdn.${AWS::StackName}.com"
+        PriceClass: PriceClass_100
+        Comment: !Sub "CloudFront distribution for ${ImageBucket}"
+
   ImageBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -58,6 +101,21 @@ Resources:
         QueueConfigurations:
           - Event: "s3:ObjectCreated:*"
             Queue: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-process-queue"
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ImageBucket
+      PolicyDocument:
+        Statement:
+          - Action: "s3:GetObject"
+            Effect: "Allow"
+            Resource: !Sub "arn:aws:s3:::${ImageBucket}/*"
+            Principal:
+              Service: "cloudfront.amazonaws.com"
+            Condition:
+              StringEquals:
+                "AWS:SourceArn": !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
 
   DBTable:
     Type: AWS::DynamoDB::Table
@@ -132,6 +190,7 @@ Resources:
       DockerTag: provided.al2.v1
       DockerContext: ./image-upload-handler
       Dockerfile: Dockerfile
+
   ImageInfoHandler:
     Type: AWS::Serverless::Function
     FunctionName: !Sub "${AWS::StackName}-image-info-handler"
@@ -148,6 +207,7 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref DBTable
+          CDN_DOMAIN: !Sub "cdn.${AWS::StackName}.com"
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref DBTable
@@ -181,3 +241,7 @@ Outputs:
   ImageUploadHandler:
     Description: Image Upload Handler Lambda Function ARN
     Value: !GetAtt ImageUploadHandler.Arn
+
+  CloudFrontDistributionDomain:
+    Description: CloudFront Distribution Domain Name
+    Value: !GetAtt CloudFrontDistribution.DomainName

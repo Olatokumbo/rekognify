@@ -16,6 +16,7 @@ import (
 
 type ResponsePayload struct {
 	Filename string  `json:"filename"`
+	URL      string  `json:"url"`
 	Labels   []Label `json:"labels"`
 }
 
@@ -95,6 +96,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	response := ResponsePayload{
 		Filename: filename,
+		URL:      fmt.Sprintf("https://%s/%s", os.Getenv("CDN_DOMAIN"), filename),
 		Labels:   parseLabels(imageData.Item["labels"].L),
 	}
 
