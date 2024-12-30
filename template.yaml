@@ -132,6 +132,31 @@ Resources:
       DockerTag: provided.al2.v1
       DockerContext: ./image-upload-handler
       Dockerfile: Dockerfile
+  ImageInfoHandler:
+    Type: AWS::Serverless::Function
+    FunctionName: !Sub "${AWS::StackName}-image-info-handler"
+    Properties:
+      PackageType: Image
+      Architectures:
+        - x86_64
+      Events:
+        CatchAll:
+          Type: Api
+          Properties:
+            Path: /info/{filename}
+            Method: GET
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref DBTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref DBTable
+        - S3ReadPolicy:
+            BucketName: !Ref ImageBucket
+    Metadata:
+      DockerTag: provided.al2.v1
+      DockerContext: ./image-info-handler
+      Dockerfile: Dockerfile
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group

@@ -18,7 +18,7 @@ resolve_s3 = true
 resolve_image_repos = true
 s3_prefix = "rekognify"
 region = "eu-west-2"
-disable_rollback = true
+disable_rollback = false
 
 [default.package.parameters]
 resolve_s3 = true
