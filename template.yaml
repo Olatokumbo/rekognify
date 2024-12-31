@@ -14,6 +14,16 @@ Globals:
   Api:
     TracingEnabled: true
 
+Parameters:
+  CertificateArn:
+    Type: String
+    Description: The ARN of the ACM certificate to use for the custom domain.
+    Default: arn:aws:acm:us-east-1:626635403708:certificate/4d0e5c7c-8d5e-4f3b-a50e-4d679c857bda
+  ZoneId:
+    Type: String
+    Description: The Route 53 hosted zone ID for the custom domain.
+    Default: Z060955721PJNEZQKW8RA
+
 Resources:
   ProcessQueue:
     Type: AWS::SQS::Queue
@@ -74,7 +84,7 @@ Resources:
           Compress: true
         ViewerCertificate:
           SslSupportMethod: sni-only
-          AcmCertificateArn: arn:aws:acm:us-east-1:626635403708:certificate/4d0e5c7c-8d5e-4f3b-a50e-4d679c857bda
+          AcmCertificateArn: !Ref CertificateArn
           MinimumProtocolVersion: TLSv1.2_2018
         HttpVersion: http2
         Aliases:
@@ -129,6 +139,44 @@ Resources:
           KeyType: "HASH"
       BillingMode: PAY_PER_REQUEST
 
+  APIGatewayDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Sub "api.${AWS::StackName}.com"
+      CertificateArn: !Ref CertificateArn
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  RestApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+
+  APIGatewayApiMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    DependsOn: APIGatewayDomainName
+    Properties:
+      DomainName: !Ref APIGatewayDomainName
+      RestApiId: !Ref RestApiGateway
+      Stage: Prod
+
+  RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref ZoneId
+      RecordSets:
+        - Name: !Sub "api.${AWS::StackName}.com"
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt APIGatewayDomainName.DistributionDomainName
+            HostedZoneId: !GetAtt APIGatewayDomainName.DistributionHostedZoneId
+        - Name: !Sub "cdn.${AWS::StackName}.com"
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt CloudFrontDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+
   S3SignedUrlHandler:
     Type: AWS::Serverless::Function
     FunctionName: !Sub "${AWS::StackName}-s3-signed-url-handler"
@@ -142,6 +190,7 @@ Resources:
           Properties:
             Path: /upload
             Method: POST
+            RestApiId: !Ref RestApiGateway
       Environment:
         Variables:
           S3_BUCKET: !Ref ImageBucket
@@ -204,6 +253,7 @@ Resources:
           Properties:
             Path: /info/{filename}
             Method: GET
+            RestApiId: !Ref RestApiGateway
       Environment:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref DBTable
@@ -235,13 +285,9 @@ Resources:
 
 Outputs:
   RekognifyAPI:
-    Description: API Gateway endpoint URL for Prod environment for First Function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/rekognify/"
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://api.${AWS::StackName}.com"
 
-  ImageUploadHandler:
-    Description: Image Upload Handler Lambda Function ARN
-    Value: !GetAtt ImageUploadHandler.Arn
-
-  CloudFrontDistributionDomain:
-    Description: CloudFront Distribution Domain Name
-    Value: !GetAtt CloudFrontDistribution.DomainName
+  RekognifyCDN:
+    Description: CloudFront Distribution URL
+    Value: !Sub "https://cdn.${AWS::StackName}.com"

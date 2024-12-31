@@ -112,6 +112,7 @@ func handler(ctx context.Context, event events.SQSEvent) (events.SQSEventRespons
 					Name:   &filename,
 				},
 			},
+			MaxLabels: aws.Int64(10),
 		})
 
 		if err != nil {
