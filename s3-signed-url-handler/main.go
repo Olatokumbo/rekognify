@@ -67,6 +67,14 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
+	bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
+	if bucketPrefix == "" {
+		return events.APIGatewayProxyResponse{
+			Body:       "S3_BUCKET_PREFIX environment variable not set.",
+			StatusCode: http.StatusInternalServerError,
+		}, nil
+	}
+
 	sess, err := session.NewSession()
 	if err != nil {
 		return events.APIGatewayProxyResponse{
@@ -77,11 +85,11 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	s3SVC := s3.New(sess)
 
-	filename := aws.String(fmt.Sprintf("%s_%s", uuid.New().String(), payload.Filename))
+	filename := fmt.Sprintf("%s_%s", uuid.New().String(), payload.Filename)
 
 	req, _ := s3SVC.PutObjectRequest(&s3.PutObjectInput{
 		Bucket:      aws.String(bucket),
-		Key:         filename,
+		Key:         aws.String(fmt.Sprintf("%s/%s", bucketPrefix, filename)),
 		ContentType: aws.String(payload.Mimetype),
 	})
 
@@ -111,7 +119,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		TableName: aws.String(tableName),
 		Item: map[string]*dynamodb.AttributeValue{
 			"filename": {
-				S: aws.String(*filename),
+				S: aws.String(filename),
 			},
 			"status": {
 				S: aws.String("READY_TO_BE_PROCESSED"),
@@ -130,7 +138,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	response := ResponsePayload{
 		URL: url,
-		ID:  *filename,
+		ID:  filename,
 	}
 	responseBody, _ := json.Marshal(response)
 

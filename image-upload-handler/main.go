@@ -65,6 +65,15 @@ func handler(ctx context.Context, event events.SQSEvent) (events.SQSEventRespons
 			continue
 		}
 
+		bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
+		if bucketPrefix == "" {
+			fmt.Printf("S3_BUCKET_PREFIX variable not set: %v\n", err)
+			failures = append(failures, events.SQSBatchItemFailure{
+				ItemIdentifier: record.MessageId,
+			})
+			continue
+		}
+
 		if tableName == "" {
 			fmt.Printf("DYNAMODB_TABLE_NAME variable not set: %v\n", err)
 			failures = append(failures, events.SQSBatchItemFailure{
@@ -109,7 +118,7 @@ func handler(ctx context.Context, event events.SQSEvent) (events.SQSEventRespons
 			Image: &rekognition.Image{
 				S3Object: &rekognition.S3Object{
 					Bucket: aws.String(bucketName),
-					Name:   &filename,
+					Name:   aws.String(fmt.Sprintf("%s/%s", bucketPrefix, filename)),
 				},
 			},
 			MaxLabels: aws.Int64(10),

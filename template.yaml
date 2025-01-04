@@ -67,6 +67,7 @@ Resources:
             Id: S3Origin
             S3OriginConfig: {}
             OriginAccessControlId: !Sub "${CloudFrontOriginAccessControl.Id}"
+            OriginPath: "/images"
         Enabled: true
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
@@ -120,7 +121,7 @@ Resources:
         Statement:
           - Action: "s3:GetObject"
             Effect: "Allow"
-            Resource: !Sub "arn:aws:s3:::${ImageBucket}/*"
+            Resource: !Sub "arn:aws:s3:::${ImageBucket}/images/*"
             Principal:
               Service: "cloudfront.amazonaws.com"
             Condition:
@@ -223,6 +224,7 @@ Resources:
       Environment:
         Variables:
           S3_BUCKET: !Ref ImageBucket
+          S3_PREFIX: "images"
           DYNAMODB_TABLE_NAME: !Ref DBTable
       Policies:
         - DynamoDBCrudPolicy:
