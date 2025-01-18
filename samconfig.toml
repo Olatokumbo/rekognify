@@ -25,6 +25,11 @@ resolve_s3 = true
 
 [default.sync.parameters]
 watch = true
+image_repositories = [
+    "ImageInfoHandler=626635403708.dkr.ecr.eu-west-2.amazonaws.com/rekognifye82d090a/imageinfohandler4ef8188crepo",
+    "ImageUploadHandler=626635403708.dkr.ecr.eu-west-2.amazonaws.com/rekognifye82d090a/imageuploadhandlera77b1b71repo",
+    "S3SignedUrlHandler=626635403708.dkr.ecr.eu-west-2.amazonaws.com/rekognifye82d090a/s3signedurlhandler1645e90brepo"
+]
 
 [default.local_start_api.parameters]
 warm_containers = "EAGER"

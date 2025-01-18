@@ -1,137 +1,103 @@
-# rekognify
+# Rekognify
 
-This is a sample template for rekognify - Below is a brief explanation of what we have generated for you:
+Rekognify is an image recognition tool developed using AWS SAM and Golang.
 
-```bash
-.
-├── README.md                   <-- This instructions file
-├── hello-world                 <-- Source code for a lambda function
-│   ├── main.go                 <-- Lambda function code
-│   └── main_test.go            <-- Unit tests
-│   └── Dockerfile              <-- Dockerfile
-└── template.yaml
-```
+## Architecture
 
-## Requirements
+The Rekognify architecture consists of the following components:
 
-* AWS CLI already configured with Administrator permission
-* [Docker installed](https://www.docker.com/community-edition)
-* SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
+- **AWS S3**: For storing uploaded images.
+- **AWS Lambda**: Processes images and generates recognition results.
+- **AWS API Gateway**: Provides endpoints for uploading images and retrieving results.
+- **AWS Rekognition**: Performs image classification and labeling.
 
-You may need the following for local testing.
-* [Golang](https://golang.org)
+## API Usage Instructions
 
-## Setup process
+### 1. Upload an Image to the S3 Bucket via a Signed URL
 
-### Installing dependencies & building the target 
+You can use the following cURL command to generate an S3 PreSigned URL and upload the image directly to the S3 bucket:
 
-In this example we use the built-in `sam build` to build a docker image from a Dockerfile and then copy the source of your application inside the Docker image.  
-Read more about [SAM Build here](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-cli-command-reference-sam-build.html) 
-
-### Local development
-
-**Invoking function locally through local API Gateway**
+**Request:**
 
 ```bash
-sam local start-api
+curl --location 'https://api.rekognify.com/upload' \
+--header 'Content-Type: application/json' \
+--data '{
+    "filename": "test.jpg",
+    "mimeType": "image/jpeg"
+}'
 ```
 
-If the previous command ran successfully you should now be able to hit the following local endpoint to invoke your function `http://localhost:3000/hello`
+**Response:**
 
-**SAM CLI** is used to emulate both Lambda and API Gateway locally and uses our `template.yaml` to understand how to bootstrap this environment (runtime, where the source code is, etc.) - The following excerpt is what the CLI will read in order to initialize an API and its routes:
-
-```yaml
-...
-Events:
-    HelloWorld:
-        Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-        Properties:
-            Path: /hello
-            Method: get
+```json
+{
+    "url": "https://presigned-s3-url",
+    "id": "test-uuid.jpg"
+}
 ```
 
-## Packaging and deployment
+- `url`: The S3 PreSigned URL.
+- `id`: The unique name or ID of the uploaded image.
 
-AWS Lambda Golang runtime requires a flat folder with the executable generated on build step. SAM will use `CodeUri` property to know where to look up for the application:
+**Supported MIME Types:**
 
-```yaml
-...
-    FirstFunction:
-        Type: AWS::Serverless::Function
-        Properties:
-            CodeUri: hello_world/
-            ...
-```
+- `image/jpeg`
+- `image/png`
+- `image/gif`
+- `image/webp`
 
-To deploy your application for the first time, run the following in your shell:
+**Note:** Ensure the uploaded image matches the specified MIME type.
+
+**Upload the Image:**
+
+Use the `PUT` method with the PreSigned URL to upload the image. A `200 OK` status should be returned upon success.
+
+### 2. Retrieve Classification Results
+
+Query the API to retrieve the classification labels for the uploaded image.
+
+**Request:**
 
 ```bash
-sam deploy --guided
+curl --location 'https://api.rekognify.com/info/{test-uuid}.jpg'
 ```
 
-The command will package and deploy your application to AWS, with a series of prompts:
+**Response:**
 
-* **Stack Name**: The name of the stack to deploy to CloudFormation. This should be unique to your account and region, and a good starting point would be something matching your project name.
-* **AWS Region**: The AWS region you want to deploy your app to.
-* **Confirm changes before deploy**: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.
-* **Allow SAM CLI IAM role creation**: Many AWS SAM templates, including this example, create AWS IAM roles required for the AWS Lambda function(s) included to access AWS services. By default, these are scoped down to minimum required permissions. To deploy an AWS CloudFormation stack which creates or modifies IAM roles, the `CAPABILITY_IAM` value for `capabilities` must be provided. If permission isn't provided through this prompt, to deploy this example you must explicitly pass `--capabilities CAPABILITY_IAM` to the `sam deploy` command.
-* **Save arguments to samconfig.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
-
-You can find your API Gateway Endpoint URL in the output values displayed after deployment.
-
-### Testing
-
-We use `testing` package that is built-in in Golang and you can simply run the following command to run our tests locally:
-
-```shell
-cd ./hello-world/
-go test -v .
-```
-# Appendix
-
-### Golang installation
-
-Please ensure Go 1.x (where 'x' is the latest version) is installed as per the instructions on the official golang website: https://golang.org/doc/install
-
-A quickstart way would be to use Homebrew, chocolatey or your linux package manager.
-
-#### Homebrew (Mac)
-
-Issue the following command from the terminal:
-
-```shell
-brew install golang
+```json
+{
+    "filename": "{test-uuid}.jpg",
+    "url": "https://cdn.rekognify.com/{test-uuid}.jpg",
+    "labels": [
+        {
+            "category": "Weapons and Military",
+            "confidence": 97.92,
+            "name": "Launch"
+        },
+        {
+            "category": "Weapons and Military",
+            "confidence": 86.16,
+            "name": "Weapon"
+        }
+    ]
+}
 ```
 
-If it's already installed, run the following command to ensure it's the latest version:
+- `filename`: The name of the uploaded image.
+- `url`: The CDN-hosted URL for the uploaded image.
+- `labels`: An array of classification results with `category`, `confidence`, and `name` for each identified label.
 
-```shell
-brew update
-brew upgrade golang
-```
 
-#### Chocolatey (Windows)
+## Development
 
-Issue the following command from the powershell:
+* AWS CLI already configured with Administrator permission.
+* [Docker installed](https://www.docker.com/community-edition).
+* SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html).
+* [Golang](https://golang.org).
 
-```shell
-choco install golang
-```
+### Setup Process
 
-If it's already installed, run the following command to ensure it's the latest version:
+#### Installing Dependencies and Building the Target
 
-```shell
-choco upgrade golang
-```
-
-## Bringing to the next level
-
-Here are a few ideas that you can use to get more acquainted as to how this overall process works:
-
-* Create an additional API resource (e.g. /hello/{proxy+}) and return the name requested through this new path
-* Update unit test to capture that
-* Package & Deploy
-
-Next, you can use the following resources to know more about beyond hello world samples and how others structure their Serverless applications:
-
-* [AWS Serverless Application Repository](https://aws.amazon.com/serverless/serverlessrepo/)
+The built-in `sam build` command is used to build a Docker image from a Dockerfile and then copy the source of your application into the Docker image.

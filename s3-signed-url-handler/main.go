@@ -59,10 +59,10 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
-	bucket := os.Getenv("S3_BUCKET")
+	bucket := os.Getenv("S3_BUCKET_NAME")
 	if bucket == "" {
 		return events.APIGatewayProxyResponse{
-			Body:       "S3_BUCKET environment variable not set.",
+			Body:       "S3_BUCKET_NAME environment variable not set.",
 			StatusCode: http.StatusInternalServerError,
 		}, nil
 	}

@@ -156,7 +156,6 @@ Resources:
 
   APIGatewayApiMapping:
     Type: AWS::ApiGateway::BasePathMapping
-    DependsOn: APIGatewayDomainName
     Properties:
       DomainName: !Ref APIGatewayDomainName
       RestApiId: !Ref RestApiGateway
@@ -194,8 +193,8 @@ Resources:
             RestApiId: !Ref RestApiGateway
       Environment:
         Variables:
-          S3_BUCKET: !Ref ImageBucket
-          S3_PREFIX: "images"
+          S3_BUCKET_NAME: !Ref ImageBucket
+          S3_BUCKET_PREFIX: "images"
           DYNAMODB_TABLE_NAME: !Ref DBTable
       Policies:
         - S3CrudPolicy:
@@ -223,8 +222,8 @@ Resources:
             Enabled: true
       Environment:
         Variables:
-          S3_BUCKET: !Ref ImageBucket
-          S3_PREFIX: "images"
+          S3_BUCKET_NAME: !Ref ImageBucket
+          S3_BUCKET_PREFIX: "images"
           DYNAMODB_TABLE_NAME: !Ref DBTable
       Policies:
         - DynamoDBCrudPolicy:

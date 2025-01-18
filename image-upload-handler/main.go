@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -56,9 +57,9 @@ func handler(ctx context.Context, event events.SQSEvent) (events.SQSEventRespons
 			continue
 		}
 
-		bucketName := os.Getenv("S3_BUCKET")
+		bucketName := os.Getenv("S3_BUCKET_NAME")
 		if bucketName == "" {
-			fmt.Printf("S3_BUCKET variable not set: %v\n", err)
+			fmt.Printf("S3_BUCKET_NAME variable not set: %v\n", err)
 			failures = append(failures, events.SQSBatchItemFailure{
 				ItemIdentifier: record.MessageId,
 			})
@@ -83,6 +84,7 @@ func handler(ctx context.Context, event events.SQSEvent) (events.SQSEventRespons
 		}
 
 		filename := s3Event.Records[0].S3.Object.Key
+		trimmedFilename := strings.TrimPrefix(filename, fmt.Sprintf("%s/", bucketPrefix))
 
 		dynamodbSess := session.Must(session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable,
@@ -94,7 +96,7 @@ func handler(ctx context.Context, event events.SQSEvent) (events.SQSEventRespons
 			TableName: &tableName,
 			Item: map[string]*dynamodb.AttributeValue{
 				"filename": {
-					S: aws.String(filename),
+					S: aws.String(trimmedFilename),
 				},
 				"status": {
 					S: aws.String("PROCESSING"),
@@ -118,7 +120,7 @@ func handler(ctx context.Context, event events.SQSEvent) (events.SQSEventRespons
 			Image: &rekognition.Image{
 				S3Object: &rekognition.S3Object{
 					Bucket: aws.String(bucketName),
-					Name:   aws.String(fmt.Sprintf("%s/%s", bucketPrefix, filename)),
+					Name:   aws.String(filename),
 				},
 			},
 			MaxLabels: aws.Int64(10),
@@ -131,7 +133,7 @@ func handler(ctx context.Context, event events.SQSEvent) (events.SQSEventRespons
 			})
 		}
 
-		saveLabelsToDynamoDB(filename, labelResult.Labels, tableName, dynamodbSVC)
+		saveLabelsToDynamoDB(trimmedFilename, labelResult.Labels, tableName, dynamodbSVC)
 
 	}
 
