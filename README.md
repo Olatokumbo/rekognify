@@ -8,8 +8,10 @@ The Rekognify architecture consists of the following components:
 
 - **AWS S3**: For storing uploaded images.
 - **AWS Lambda**: Processes images and generates recognition results.
+- **AWS SQS**: Buffer zone for incoming tasks.
 - **AWS API Gateway**: Provides endpoints for uploading images and retrieving results.
 - **AWS Rekognition**: Performs image classification and labeling.
+- **AWS Cloudfront**: Content Delivery Network to accelerate media delivery.
 
 ## API Usage Instructions
 
