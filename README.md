@@ -104,3 +104,7 @@ curl --location 'https://api.rekognify.com/info/{test-uuid}.jpg'
 #### Installing Dependencies and Building the Target
 
 The built-in `sam build` command is used to build a Docker image from a Dockerfile and then copy the source of your application into the Docker image.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
