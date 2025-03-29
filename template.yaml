@@ -112,6 +112,15 @@ Resources:
         QueueConfigurations:
           - Event: "s3:ObjectCreated:*"
             Queue: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-process-queue"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+            AllowedHeaders:
+              - "*"
 
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -153,6 +162,10 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: Prod
+      Cors:
+        AllowMethods: "'OPTIONS,POST,GET,PUT'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
 
   APIGatewayApiMapping:
     Type: AWS::ApiGateway::BasePathMapping
@@ -203,7 +216,7 @@ Resources:
             TableName: !Ref DBTable
     Metadata:
       DockerTag: provided.al2.v1
-      DockerContext: ./s3-signed-url-handler
+      DockerContext: ./backend/s3-signed-url-handler
       Dockerfile: Dockerfile
 
   ImageUploadHandler:
@@ -238,7 +251,7 @@ Resources:
             Resource: "*"
     Metadata:
       DockerTag: provided.al2.v1
-      DockerContext: ./image-upload-handler
+      DockerContext: ./backend/image-upload-handler
       Dockerfile: Dockerfile
 
   ImageInfoHandler:
@@ -266,7 +279,7 @@ Resources:
             BucketName: !Ref ImageBucket
     Metadata:
       DockerTag: provided.al2.v1
-      DockerContext: ./image-info-handler
+      DockerContext: ./backend/image-info-handler
       Dockerfile: Dockerfile
 
   ApplicationResourceGroup:

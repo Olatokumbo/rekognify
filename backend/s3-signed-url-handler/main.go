@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -17,7 +19,6 @@ import (
 )
 
 type RequestPayload struct {
-	Filename string `json:"filename"`
 	Mimetype string `json:"mimetype"`
 }
 
@@ -33,6 +34,13 @@ var allowedMimeTypes = map[string]bool{
 	"image/webp": true,
 }
 
+var corsHeaders = map[string]string{
+	"Access-Control-Allow-Origin":  "*",
+	"Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT",
+	"Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+	"Content-Type":                 "application/json",
+}
+
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	var payload RequestPayload
@@ -42,13 +50,15 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("Failed to parse request body: %s", err.Error()),
 			StatusCode: http.StatusBadRequest,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
-	if payload.Filename == "" || payload.Mimetype == "" {
+	if payload.Mimetype == "" {
 		return events.APIGatewayProxyResponse{
-			Body:       "Both 'filename' and 'mimetype' are required.",
+			Body:       "Mimetype is required.",
 			StatusCode: http.StatusBadRequest,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -56,6 +66,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("Unsupported file type: %s", payload.Mimetype),
 			StatusCode: http.StatusBadRequest,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -64,6 +75,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       "S3_BUCKET_NAME environment variable not set.",
 			StatusCode: http.StatusInternalServerError,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -72,6 +84,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       "S3_BUCKET_PREFIX environment variable not set.",
 			StatusCode: http.StatusInternalServerError,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -80,12 +93,20 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("Failed to create AWS session: %s", err.Error()),
 			StatusCode: http.StatusInternalServerError,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
 	s3SVC := s3.New(sess)
 
-	filename := fmt.Sprintf("%s_%s", uuid.New().String(), payload.Filename)
+	exts, err := mime.ExtensionsByType(payload.Mimetype)
+	if err != nil || len(exts) == 0 {
+		fmt.Println("Unknown mimetype, defaulting to .jpg")
+		exts = []string{".jpg"}
+	}
+	ext := strings.TrimPrefix(exts[0], ".")
+
+	filename := fmt.Sprintf("%s.%s", uuid.New().String(), ext)
 
 	req, _ := s3SVC.PutObjectRequest(&s3.PutObjectInput{
 		Bucket:      aws.String(bucket),
@@ -98,6 +119,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("Failed to generate presigned URL: %s", err.Error()),
 			StatusCode: http.StatusInternalServerError,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -106,6 +128,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("DYNAMODB_TABLE_NAME variable not set: %s", err.Error()),
 			StatusCode: http.StatusInternalServerError,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -133,6 +156,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("Error inserting item into DynamoDB: %s", err.Error()),
 			StatusCode: http.StatusInternalServerError,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -145,9 +169,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	return events.APIGatewayProxyResponse{
 		Body:       string(responseBody),
 		StatusCode: http.StatusOK,
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
+		Headers:    corsHeaders,
 	}, nil
 }
 
