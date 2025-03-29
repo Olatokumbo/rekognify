@@ -112,6 +112,15 @@ Resources:
         QueueConfigurations:
           - Event: "s3:ObjectCreated:*"
             Queue: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-process-queue"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+            AllowedHeaders:
+              - "*"
 
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -154,8 +163,10 @@ Resources:
     Properties:
       StageName: Prod
       Cors:
-        AllowOrigin: "*"
-        
+        AllowMethods: "'OPTIONS,POST,GET,PUT'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
   APIGatewayApiMapping:
     Type: AWS::ApiGateway::BasePathMapping
     Properties:

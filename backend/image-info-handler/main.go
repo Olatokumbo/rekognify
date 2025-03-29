@@ -26,6 +26,13 @@ type Label struct {
 	Name       string  `json:"name"`
 }
 
+var corsHeaders = map[string]string{
+	"Access-Control-Allow-Origin":  "*",
+	"Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT",
+	"Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+	"Content-Type":                 "application/json",
+}
+
 func parseLabels(labels []*dynamodb.AttributeValue) []Label {
 	var parsedLabels []Label
 	for _, label := range labels {
@@ -54,6 +61,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       "Filename is required",
 			StatusCode: http.StatusBadRequest,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -77,6 +85,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       "Error getting item from DynamoDB",
 			StatusCode: http.StatusInternalServerError,
+			Headers:    corsHeaders,
 		}, err
 	}
 
@@ -84,6 +93,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       "Item not found",
 			StatusCode: http.StatusNotFound,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -91,6 +101,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{
 			Body:       "Item is still being processed",
 			StatusCode: http.StatusConflict,
+			Headers:    corsHeaders,
 		}, nil
 	}
 
@@ -105,9 +116,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	return events.APIGatewayProxyResponse{
 		StatusCode: 200,
 		Body:       string(responseBody),
-		Headers: map[string]string{
-			"Content-Type": "application/json",
-		},
+		Headers:    corsHeaders,
 	}, nil
 }
 
